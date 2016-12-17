@@ -24,7 +24,8 @@ params				: param (',' param)*
 					|
 					;
 
-param				: type_spec IDENT
+param				: type_spec '*' IDENT
+					| type_spec IDENT
 					| type_spec IDENT '[' ']'
 					;
 
@@ -60,6 +61,7 @@ return_stmt			: RETURN ';'
 expr				:  LITERAL
 					| '(' expr ')'
 					| IDENT
+					| '&' IDENT
 					| IDENT '[' expr ']'
 					| IDENT '(' args ')'
 					| '-' expr
@@ -83,7 +85,7 @@ expr				:  LITERAL
 					| IDENT '=' expr
 					| IDENT '[' expr ']' '=' expr
 					;
-				
+					
 args				: expr (',' expr)*
 					|
 					;
@@ -101,7 +103,7 @@ GE					: '>=';
 EQ					: '==';
 NE					: '!=';
 
-IDENT  				: [a-zA-Z_]([a-zA-Z_]|[0-9])*
+IDENT  				: (|'*')[a-zA-Z_]([a-zA-Z_]|[0-9])*
 					;
 					
 LITERAL				: DecimalConstant
