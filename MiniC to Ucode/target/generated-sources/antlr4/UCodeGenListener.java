@@ -472,6 +472,28 @@ public class UCodeGenListener extends MiniCBaseListener {
 		hasReturnStatement = true;
 		newTexts.put(ctx, line.toString());
 	}
+
+	@Override
+    public void exitBreak_stmt(MiniCParser.Break_stmtContext ctx) {
+        StringBuilder line = new StringBuilder();
+        String whileOutName = Keyword.WHILEOUT + whiles;
+
+        // BREAK ';'
+        line.append(Keyword.UJP).append(whileOutName).append("\n");
+
+        newTexts.put(ctx, line.toString());
+    }
+
+    @Override
+    public void exitContinue_stmt(MiniCParser.Continue_stmtContext ctx) {
+        StringBuilder line = new StringBuilder();
+        String whileName = Keyword.WHILE + whiles;
+
+        // CONTINUE ';'
+        line.append(Keyword.UJP).append(whileName).append("\n");
+
+        newTexts.put(ctx, line.toString());
+    }
 	
 	private int indentation(String value) {
 		return 11 - value.length();
@@ -494,7 +516,9 @@ public class UCodeGenListener extends MiniCBaseListener {
 			return 1;
 		
 		// compile error
-		System.out.println("Compile error: " + name + " is undefined");
+        System.err.println("Compile error: Use of undeclared identifier '" + name + '"');
+        System.exit(0);
+        
 		return 0;
 	}
 

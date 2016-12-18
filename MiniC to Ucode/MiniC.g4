@@ -34,6 +34,8 @@ stmt				: expr_stmt
 					| if_stmt
 					| while_stmt
 					| return_stmt
+					| break_stmt
+					| continue_stmt
 					;
 
 expr_stmt			: expr ';'
@@ -96,6 +98,8 @@ WHILE				: 'while';
 IF					: 'if';
 ELSE				: 'else';
 RETURN				: 'return';
+BREAK               : 'break';
+CONTINUE            : 'continue';
 OR					: 'or';
 AND					: 'and';
 LE					: '<=';
