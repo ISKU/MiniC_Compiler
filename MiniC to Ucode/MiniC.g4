@@ -9,6 +9,7 @@ decl				: var_decl
 
 var_decl			: type_spec IDENT ';'
 					| type_spec IDENT '=' LITERAL ';'
+					| type_spec IDENT '=' IDENT ';'
 					| type_spec IDENT '[' LITERAL ']' ';'
 					;
 
@@ -49,6 +50,7 @@ compound_stmt		: '{' local_decl* stmt* '}'
 
 local_decl			: type_spec IDENT ';'
 					| type_spec IDENT '=' LITERAL ';'
+					| type_spec IDENT '=' IDENT ';'
 					| type_spec IDENT '[' LITERAL ']' ';'
 					;
 
