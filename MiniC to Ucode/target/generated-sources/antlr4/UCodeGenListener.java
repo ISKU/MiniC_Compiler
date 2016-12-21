@@ -11,8 +11,9 @@ public class UCodeGenListener extends MiniCBaseListener {
 
 	private ParseTreeProperty<String> newTexts;
 	private ArrayList<Hashtable<String, Integer>> variables; // hashtable<variable name, sequence>
-	private Hashtable<String, Integer> functions; // hashtable<function name, function number>
+	private Hashtable<String, Boolean> functions; // hashtable<function name, function type>
 
+	private String currentFunctionName = null;
 	private int globalVariables = 0; // the number of global variables
 	private int localVariables = 0; // the number of local variables of each function
 	private int functionNumber = 0; // the number of functions
@@ -20,13 +21,19 @@ public class UCodeGenListener extends MiniCBaseListener {
 	private int var_decls = 0; // the number of 'var_decl'
 	private int whiles = 0; // the number of 'while' keywords
 	private int ifs = 0; // the number of 'if' keywords
+	
 	private boolean hasReturnStatement = false; // if a function has the return type void
+	private boolean isIntegerFunction = false; // true: integer return type, false: void
+	private boolean functionCallType = false; // true: return integer, false: void
 
 	public UCodeGenListener() {
 		super();
 		newTexts = new ParseTreeProperty<String>();
 		variables= new ArrayList<Hashtable<String, Integer>>();
-		functions = new Hashtable<String, Integer>();
+		functions = new Hashtable<String, Boolean>();
+		functions.put("write", false);
+		functions.put("read", false);
+		functions.put("lf", false);
 		
 		variables.add(new Hashtable<String, Integer>()); // global variables
 	}
@@ -95,12 +102,12 @@ public class UCodeGenListener extends MiniCBaseListener {
 			String name = ctx.IDENT(1).getText();
 			int location = findVariableLocation(name);
 			int sequence = variables.get((location == 1) ? 0 : functionNumber).get(name);
-			++localVariables;
+			++globalVariables;
 			
-			line.append(Keyword.SYM).append("1 ").append(localVariables).append(" 1\n");
+			line.append(Keyword.SYM).append("1 ").append(globalVariables).append(" 1\n");
 			line.append(Keyword.LOD).append(location + " ").append(sequence).append("\n");
-			line.append(Keyword.STR).append("1 ").append(localVariables).append("\n");
-			variables.get(functionNumber).put(ctx.IDENT(0).getText(), localVariables);
+			line.append(Keyword.STR).append("1 ").append(globalVariables).append("\n");
+			variables.get(functionNumber).put(ctx.IDENT(0).getText(), globalVariables);
 		}
 				
 		// type_spec IDENT '[' LITERAL ']' ';'
@@ -124,8 +131,10 @@ public class UCodeGenListener extends MiniCBaseListener {
 	@Override
 	public void enterFun_decl(MiniCParser.Fun_declContext ctx) {
 		localVariables = 0;
-		functions.put(ctx.IDENT().getText(), ++functionNumber);
+		functions.put(ctx.IDENT().getText(), ctx.type_spec().getText().equals("int") ? true : false);
 		variables.add(new Hashtable<String, Integer>()); // local variables
+		isIntegerFunction = ctx.type_spec().getText().equals("int") ? true : false;
+		currentFunctionName = ctx.IDENT().getText();
 	}
 
 	@Override
@@ -139,6 +148,11 @@ public class UCodeGenListener extends MiniCBaseListener {
 		line.append(newTexts.get(ctx.compound_stmt()));
 		line.append(hasReturnStatement ? "" : Keyword.RET + "\n");
 		line.append(Keyword.END).append("\n");
+		
+		if (isIntegerFunction && !hasReturnStatement) {
+			System.err.println("Compile Error: non-void function '" + currentFunctionName + "' should return a value");
+			System.exit(0);
+		}
 		
 		hasReturnStatement = false;
 		newTexts.put(ctx, line.toString());
@@ -261,16 +275,21 @@ public class UCodeGenListener extends MiniCBaseListener {
 			String name = ctx.IDENT().getText();
 			int location = findVariableLocation(name);
 			int sequence = variables.get((location == 1) ? 0 : functionNumber).get(name);
-
+			
+			if (!functionCallType) {
+				System.err.println("Compile Error: initializing 'int' with an expression of incompatible type 'void'");
+				System.exit(0);
+			}
+			
 			if (name.split("")[0].equals("*")) { // for Pointer
 				line.append(Keyword.LOD).append(location + " ").append(sequence).append("\n");
 				line.append(newTexts.get(ctx.expr(0)));
-				line.append(Keyword.STI).append("\n");	
+				line.append(Keyword.STI).append("\n");
 			} else {
 				line.append(newTexts.get(ctx.expr(0)));
 				line.append(Keyword.STR).append(location + " ").append(sequence).append("\n");
 			}
-		} 
+		}
 		else if (isArrayAssignmentOperation(ctx)) { // IDENT '[' expr ']' '=' expr
 			String name = ctx.IDENT().getText();
 			int location = findVariableLocation(name);
@@ -300,6 +319,7 @@ public class UCodeGenListener extends MiniCBaseListener {
 			line.append(Keyword.LDP).append("\n");
 			line.append(newTexts.get(ctx.args()));
 			line.append(Keyword.CALL).append(ctx.IDENT()).append("\n");
+			functionCallType = functions.get(ctx.IDENT().getText());
 		} 
 		else if (isBracketOperation(ctx)) { // '(' expr ')'
 			line.append(newTexts.get(ctx.expr(0)));
@@ -486,13 +506,24 @@ public class UCodeGenListener extends MiniCBaseListener {
 		StringBuilder line = new StringBuilder();
 
 		// RETURN ';'
-		if (ctx.getChildCount() == 2)
+		if (ctx.getChildCount() == 2) {
 			line.append(Keyword.RET).append("\n");
-
+			
+			if (isIntegerFunction) {
+				System.err.println("Compile Error: non-void function '" + currentFunctionName + "' should return a value");
+				System.exit(0);
+			}
+		}
+		
 		// RETURN expr ';'
 		if (ctx.getChildCount() == 3) {
 			line.append(newTexts.get(ctx.expr()));
 			line.append(Keyword.RETV).append("\n");
+			
+			if (!isIntegerFunction) {
+				System.err.println("Compile Error: void function '" + currentFunctionName + "' should not return a value");
+				System.exit(0);
+			}
 		}
 
 		hasReturnStatement = true;
@@ -536,13 +567,13 @@ public class UCodeGenListener extends MiniCBaseListener {
 	}
 
 	private int findVariableLocation(String name) {
-		if (variables.get(functionNumber).containsKey(name)) // find local variable of current function
+		if (functionNumber != 0 && variables.get(functionNumber).containsKey(name)) // find local variable of current function
 			return 2;
 		if (variables.get(0).containsKey(name)) // find global variable
 			return 1;
 		
 		// compile error
-        System.err.println("Compile error: Use of undeclared identifier '" + name + '"');
+        System.err.println("Compile Error: Use of undeclared identifier '" + name + '"');
         System.exit(0);
         
 		return 0;
