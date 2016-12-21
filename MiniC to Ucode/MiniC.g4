@@ -61,6 +61,12 @@ if_stmt				: IF '(' expr ')' stmt
 return_stmt			: RETURN ';'
 					| RETURN expr ';'
 					;
+					
+break_stmt			: BREAK ';'
+					;
+					
+continue_stmt		: CONTINUE ';'
+					;
 
 expr				:  LITERAL
 					| '(' expr ')'

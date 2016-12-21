@@ -82,18 +82,31 @@ public class UCodeGenListener extends MiniCBaseListener {
 		}
 
 		// type_spec IDENT '=' LITERAL ';'
-		if (ctx.getChildCount() == 5) {
+		if (ctx.getChildCount() == 5  && ctx.IDENT(1) == null) {
 			++globalVariables;
 			line.append(Keyword.SYM).append("1 ").append(globalVariables).append(" 1\n");
 			line.append(Keyword.LDC).append(numeration(ctx.LITERAL().getText())).append("\n");
 			line.append(Keyword.STR).append("1 ").append(globalVariables).append("\n");
 			variables.get(0).put(ctx.IDENT(0).getText(), globalVariables);
 		}
+		
+		// type_spec IDENT '=' IDENT ';'
+		if (ctx.getChildCount() == 5 && ctx.IDENT(1) != null) {
+			String name = ctx.IDENT(1).getText();
+			int location = findVariableLocation(name);
+			int sequence = variables.get((location == 1) ? 0 : functionNumber).get(name);
+			++localVariables;
+			
+			line.append(Keyword.SYM).append("1 ").append(localVariables).append(" 1\n");
+			line.append(Keyword.LOD).append(location + " ").append(sequence).append("\n");
+			line.append(Keyword.STR).append("1 ").append(localVariables).append("\n");
+			variables.get(functionNumber).put(ctx.IDENT(0).getText(), localVariables);
+		}
 				
 		// type_spec IDENT '[' LITERAL ']' ';'
 		if (ctx.getChildCount() == 6) {
 			int arraySize = Integer.parseInt(numeration(ctx.LITERAL().getText()));
-			String arrayName = ctx.IDENT().getText();
+			String arrayName = ctx.IDENT(0).getText();
 			
 			++globalVariables;
 			line.append(Keyword.SYM).append("1 ").append(globalVariables + " ").append(arraySize + 1).append("\n");
