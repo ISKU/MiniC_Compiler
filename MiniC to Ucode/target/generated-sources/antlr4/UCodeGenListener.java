@@ -6,6 +6,7 @@ import java.io.BufferedWriter;
 import java.io.FileWriter;
 import java.util.ArrayList;
 import java.util.Hashtable;
+import java.util.StringTokenizer;
 
 public class UCodeGenListener extends MiniCBaseListener {
 
@@ -64,6 +65,98 @@ public class UCodeGenListener extends MiniCBaseListener {
 			writer.close();
 		} catch (IOException error) {
 			System.out.println(error.toString());
+		}
+		
+		// get basic block
+		ArrayList<BasicBlock> blockList = new ArrayList<BasicBlock>();
+		String[] instruction = line.toString().split("\n");
+		boolean[] isHeader = new boolean[instruction.length];
+		isHeader[0] = true;
+		blockList.add(new BasicBlock("ENTRY")); // make entry node
+		
+		for (int index = 0; index < instruction.length; index++) {
+			StringTokenizer parser = new StringTokenizer(instruction[index]);
+			
+			if (isBranch(parser.nextToken())) {
+				String target = parser.nextToken();
+				
+				// find target
+				for (int jndex = 0; jndex < instruction.length; jndex++)
+					if (target.equals(new StringTokenizer(instruction[jndex]).nextToken())) {
+						isHeader[jndex] = true;
+						break;
+					}
+				
+				isHeader[index + 1] = true;
+			}
+		}
+		
+		ArrayList<String> labelList = new ArrayList<>();
+		labelList.add("L" + 0 + ": " + instruction[0]);
+		for (int index = 1; index < instruction.length; index++) {
+			if (!isHeader[index]) {
+				labelList.add("L" + index + ": " + instruction[index]);
+			} else {
+				blockList.add(new BasicBlock(String.valueOf(BasicBlock.blockSize++), labelList));
+				labelList.clear();
+				labelList.add("L" + index + ": " + instruction[index]);
+			}
+		}
+		blockList.add(new BasicBlock(String.valueOf(BasicBlock.blockSize++), labelList));
+		labelList.clear();
+		blockList.add(new BasicBlock("EXIT")); // make exit node
+		
+		
+		for (int index = 0; index < blockList.size(); index++) {
+			blockList.get(index).print();
+			System.out.println();
+		}
+		
+		// set entry node's Successors and Predecessors
+		blockList.get(0).addSuccessors(blockList.get(1));
+		blockList.get(1).addPredecessor(blockList.get(0));
+		
+		for (int index = 1; index < blockList.size() - 1; index++) {
+			ArrayList<String> labels = blockList.get(index).labels;
+			String instr = labels.get(labels.size() - 1);
+			StringTokenizer parser = new StringTokenizer(instr);
+			System.out.println("Last " + instr);
+			
+			parser.nextToken();
+			String opJump = parser.nextToken();
+			if (isBranch(opJump)) {
+				String target = parser.nextToken();
+				
+				
+				for (int jndex = 1; jndex < blockList.size(); jndex++) {
+					String header = blockList.get(jndex).labels.get(0).split(" ")[1];
+					
+					if (header.equals(target)) {
+						blockList.get(jndex).addPredecessor(blockList.get(index));
+						
+						if (opJump.equals("fjp")) {
+							blockList.get(index).addSuccessors(blockList.get(index + 1));
+							blockList.get(index).addSuccessors(blockList.get(jndex));
+							blockList.get(index + 1).addPredecessor(blockList.get(index));
+						} else {
+							blockList.get(index).addSuccessors(blockList.get(jndex));
+						}
+						break;
+					}
+				}
+			} else {
+				blockList.get(index + 1).addPredecessor(blockList.get(index));
+				blockList.get(index).addSuccessors(blockList.get(index + 1));
+			}
+		}
+		
+		for (int index = 0; index < blockList.size(); index++) {
+			if (index == 0)
+				System.out.println("BB ENTRY:\n" + blockList.get(index).toString());
+			else if (index == blockList.size() - 1)
+				System.out.println("BB EXIT:\n" + blockList.get(index).toString());
+			else
+				System.out.println("BB " + index + ":\n" + blockList.get(index).toString());
 		}
 	}
 
@@ -480,6 +573,7 @@ public class UCodeGenListener extends MiniCBaseListener {
 	public void exitIf_stmt(MiniCParser.If_stmtContext ctx) {
 		StringBuilder line = new StringBuilder();
 		String ifName = Keyword.IF + ifs;
+		String ifOutName = Keyword.IFOUT + ifs;
 
 		// IF '(' expr ')' stmt
 		if (ctx.getChildCount() == 5) {
@@ -494,8 +588,10 @@ public class UCodeGenListener extends MiniCBaseListener {
 			line.append(newTexts.get(ctx.expr()));
 			line.append(Keyword.FJP).append(ifName).append("\n");
 			line.append(newTexts.get(ctx.stmt(0)));
+			line.append(Keyword.UJP).append(ifOutName).append("\n");
 			line.append(ifName).append(Keyword.SPACE[indentation(ifName)]).append(Keyword.NOP).append("\n");
 			line.append(newTexts.get(ctx.stmt(1)));
+			line.append(ifOutName).append(Keyword.SPACE[indentation(ifOutName)]).append(Keyword.NOP).append("\n");
 		}
 
 		newTexts.put(ctx, line.toString());
@@ -694,8 +790,12 @@ public class UCodeGenListener extends MiniCBaseListener {
 				&& (value.charAt(0) == '0') 
 				&& (value.charAt(1) == 'x' || value.charAt(1) == 'X');
 	}
-	
+
 	private boolean isOctalNumber(String value) {
 		return (value.length() >= 2) && (value.charAt(0) == '0');
+	}
+	
+	private boolean isBranch(String value) {
+		return (value.equals("ujp")) || (value.equals("fjp"));
 	}
 }

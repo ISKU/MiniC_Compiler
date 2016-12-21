@@ -59,4 +59,5 @@ public class Keyword {
 	public static final String WHILE = "while";
 	public static final String WHILEOUT = "wout";
 	public static final String IF = "if";
+	public static final String IFOUT = "ifout";
 }
