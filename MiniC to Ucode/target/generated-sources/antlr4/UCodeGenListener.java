@@ -24,7 +24,7 @@ public class UCodeGenListener extends MiniCBaseListener {
 	
 	private boolean hasReturnStatement = false; // if a function has the return type void
 	private boolean isIntegerFunction = false; // true: integer return type, false: void
-	private boolean functionCallType = false; // true: return integer, false: void
+	private boolean functionCallType = true; // true: return integer, false: void
 
 	public UCodeGenListener() {
 		super();
@@ -276,11 +276,6 @@ public class UCodeGenListener extends MiniCBaseListener {
 			int location = findVariableLocation(name);
 			int sequence = variables.get((location == 1) ? 0 : functionNumber).get(name);
 			
-			if (!functionCallType) {
-				System.err.println("Compile Error: initializing 'int' with an expression of incompatible type 'void'");
-				System.exit(0);
-			}
-			
 			if (name.split("")[0].equals("*")) { // for Pointer
 				line.append(Keyword.LOD).append(location + " ").append(sequence).append("\n");
 				line.append(newTexts.get(ctx.expr(0)));
@@ -288,6 +283,11 @@ public class UCodeGenListener extends MiniCBaseListener {
 			} else {
 				line.append(newTexts.get(ctx.expr(0)));
 				line.append(Keyword.STR).append(location + " ").append(sequence).append("\n");
+			}
+			
+			if (!functionCallType) {
+				System.err.println("Compile Error: initializing 'int' with an expression of incompatible type 'void'");
+				System.exit(0);
 			}
 		}
 		else if (isArrayAssignmentOperation(ctx)) { // IDENT '[' expr ']' '=' expr
