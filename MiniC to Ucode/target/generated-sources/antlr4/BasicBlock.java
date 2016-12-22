@@ -1,22 +1,26 @@
 import java.util.ArrayList;
 
 public class BasicBlock {
-	public static int blockSize = 0;
+	public static int blockSize = 1;
 	public String blockNumber;
 	public ArrayList<String> labels;
+	public ArrayList<String> noLabels;
 	public ArrayList<BasicBlock> predecessors;
 	public ArrayList<BasicBlock> successors;
 	
 	public BasicBlock(String blockNumber) {
 		 labels = new ArrayList<>();
+		 noLabels = new ArrayList<>();
 		 predecessors = new ArrayList<>();
 		 successors = new ArrayList<>();
 		 this.blockNumber = blockNumber;
 	}
 	
-	public BasicBlock(String blockNumber, ArrayList<String> labelList) {
+	public BasicBlock(String blockNumber, ArrayList<String> labelList, ArrayList<String> noLabelList) {
 		 labels = new ArrayList<>();
 		 labels.addAll(labelList);
+		 noLabels = new ArrayList<>();
+		 noLabels.addAll(noLabelList);
 		 predecessors = new ArrayList<>();
 		 successors = new ArrayList<>();
 		 this.blockNumber = blockNumber;
@@ -30,9 +34,18 @@ public class BasicBlock {
 		successors.add(successor);
 	}
 	
-	public void print() {
+	public String print() {
+		StringBuilder code = new StringBuilder();
 		for(String instr : labels)
-			System.out.println(instr);
+			code.append(instr).append("\n");
+		return code.toString();
+	}
+	
+	public String printCode() {
+		StringBuilder code = new StringBuilder();
+		for(String instr : noLabels)
+			code.append(instr).append("\n");
+		return code.toString();
 	}
 	
 	@Override

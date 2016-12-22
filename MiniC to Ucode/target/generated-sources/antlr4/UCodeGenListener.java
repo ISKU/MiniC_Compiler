@@ -13,6 +13,7 @@ public class UCodeGenListener extends MiniCBaseListener {
 	private ParseTreeProperty<String> newTexts;
 	private ArrayList<Hashtable<String, Integer>> variables; // hashtable<variable name, sequence>
 	private Hashtable<String, Boolean> functions; // hashtable<function name, function type>
+	private ArrayList<BasicBlock> blockList;
 
 	private String currentFunctionName = null;
 	private int globalVariables = 0; // the number of global variables
@@ -31,6 +32,7 @@ public class UCodeGenListener extends MiniCBaseListener {
 		super();
 		newTexts = new ParseTreeProperty<String>();
 		variables= new ArrayList<Hashtable<String, Integer>>();
+		blockList = new ArrayList<BasicBlock>();
 		functions = new Hashtable<String, Boolean>();
 		functions.put("write", false);
 		functions.put("read", false);
@@ -42,6 +44,8 @@ public class UCodeGenListener extends MiniCBaseListener {
 	@Override
 	public void exitProgram(MiniCParser.ProgramContext ctx) {
 		StringBuilder line = new StringBuilder();
+		StringBuilder graph = new StringBuilder();
+		StringBuilder optimizeCode = new StringBuilder();
 
 		// fun_decl
 		for (int index = var_decls, declSize = ctx.getChildCount(); index < declSize; index++)
@@ -68,7 +72,6 @@ public class UCodeGenListener extends MiniCBaseListener {
 		}
 		
 		// get basic block
-		ArrayList<BasicBlock> blockList = new ArrayList<BasicBlock>();
 		String[] instruction = line.toString().split("\n");
 		boolean[] isHeader = new boolean[instruction.length];
 		isHeader[0] = true;
@@ -92,24 +95,29 @@ public class UCodeGenListener extends MiniCBaseListener {
 		}
 		
 		ArrayList<String> labelList = new ArrayList<>();
+		ArrayList<String> noLabelList = new ArrayList<>();
 		labelList.add("L" + 0 + ": " + instruction[0]);
+		noLabelList.add(instruction[0]);
 		for (int index = 1; index < instruction.length; index++) {
 			if (!isHeader[index]) {
 				labelList.add("L" + index + ": " + instruction[index]);
+				noLabelList.add(instruction[index]);
 			} else {
-				blockList.add(new BasicBlock(String.valueOf(BasicBlock.blockSize++), labelList));
+				blockList.add(new BasicBlock(String.valueOf(BasicBlock.blockSize++), labelList, noLabelList));
 				labelList.clear();
+				noLabelList.clear();
 				labelList.add("L" + index + ": " + instruction[index]);
+				noLabelList.add(instruction[index]);
 			}
 		}
-		blockList.add(new BasicBlock(String.valueOf(BasicBlock.blockSize++), labelList));
+		blockList.add(new BasicBlock(String.valueOf(BasicBlock.blockSize++), labelList, noLabelList));
 		labelList.clear();
+		noLabelList.clear();
 		blockList.add(new BasicBlock("EXIT")); // make exit node
 		
 		
 		for (int index = 0; index < blockList.size(); index++) {
-			blockList.get(index).print();
-			System.out.println();
+			graph.append(blockList.get(index).print()).append("\n");
 		}
 		
 		// set entry node's Successors and Predecessors
@@ -120,27 +128,27 @@ public class UCodeGenListener extends MiniCBaseListener {
 			ArrayList<String> labels = blockList.get(index).labels;
 			String instr = labels.get(labels.size() - 1);
 			StringTokenizer parser = new StringTokenizer(instr);
-			System.out.println("Last " + instr);
 			
 			parser.nextToken();
 			String opJump = parser.nextToken();
 			if (isBranch(opJump)) {
 				String target = parser.nextToken();
 				
-				
 				for (int jndex = 1; jndex < blockList.size(); jndex++) {
 					String header = blockList.get(jndex).labels.get(0).split(" ")[1];
 					
 					if (header.equals(target)) {
-						blockList.get(jndex).addPredecessor(blockList.get(index));
-						
-						if (opJump.equals("fjp")) {
+						if (opJump.equals("fjp")) { // fjp
 							blockList.get(index).addSuccessors(blockList.get(index + 1));
 							blockList.get(index).addSuccessors(blockList.get(jndex));
 							blockList.get(index + 1).addPredecessor(blockList.get(index));
-						} else {
+							blockList.get(jndex).addPredecessor(blockList.get(index));
+						} 
+						else { // ujp
 							blockList.get(index).addSuccessors(blockList.get(jndex));
+							blockList.get(jndex).addPredecessor(blockList.get(index));
 						}
+						
 						break;
 					}
 				}
@@ -152,11 +160,64 @@ public class UCodeGenListener extends MiniCBaseListener {
 		
 		for (int index = 0; index < blockList.size(); index++) {
 			if (index == 0)
-				System.out.println("BB ENTRY:\n" + blockList.get(index).toString());
+				graph.append("BB ENTRY:\n" + blockList.get(index).toString()).append("\n");
 			else if (index == blockList.size() - 1)
-				System.out.println("BB EXIT:\n" + blockList.get(index).toString());
+				graph.append("BB EXIT:\n" + blockList.get(index).toString()).append("\n");
+			else 
+				graph.append("BB " + index + ":\n" + blockList.get(index).toString()).append("\n");
+		}
+		
+		System.out.println(graph.toString());
+		try {
+			BufferedWriter writer = new BufferedWriter(new FileWriter("cfg.txt"));
+			writer.write(graph.toString());
+			writer.close();
+		} catch (IOException error) {
+			System.out.println(error.toString());
+		}
+		
+		// Unreachable Code Elimination
+		boolean[] visited = new boolean[blockList.size()];
+		mark(blockList.get(0), visited);
+		
+		for (int index = 0; index < blockList.size(); index++) {
+			if (visited[index])
+				optimizeCode.append(blockList.get(index).printCode());
+		}
+		
+		System.out.println(optimizeCode.toString());
+		try {
+			BufferedWriter writer = new BufferedWriter(new FileWriter("optimize_ucode.uco"));
+			writer.write(optimizeCode.toString());
+			writer.close();
+		} catch (IOException error) {
+			System.out.println(error.toString());
+		}
+	}
+	
+	private void mark(BasicBlock currentBB, boolean[] visited) {
+		int index = 0;
+		String blockNumber = currentBB.blockNumber;
+		
+		if (blockNumber.equals("ENTRY"))
+			index = 0;
+		else if (blockNumber.equals("EXIT"))
+			index = blockList.size() - 1;
+		else
+			index = Integer.parseInt(blockNumber);
+		
+		visited[index] = true;
+		
+		for (BasicBlock sucessor : currentBB.successors) {
+			if (sucessor.blockNumber.equals("ENTRY"))
+				index = 0;
+			else if (sucessor.blockNumber.equals("EXIT"))
+				index = blockList.size() - 1;
 			else
-				System.out.println("BB " + index + ":\n" + blockList.get(index).toString());
+				index = Integer.parseInt(sucessor.blockNumber);
+			
+			if (!visited[index])
+				mark(sucessor, visited);
 		}
 	}
 
@@ -228,6 +289,7 @@ public class UCodeGenListener extends MiniCBaseListener {
 		variables.add(new Hashtable<String, Integer>()); // local variables
 		isIntegerFunction = ctx.type_spec().getText().equals("int") ? true : false;
 		currentFunctionName = ctx.IDENT().getText();
+		functionNumber++;
 	}
 
 	@Override
@@ -675,6 +737,7 @@ public class UCodeGenListener extends MiniCBaseListener {
 		return 0;
 	}
 
+	
 	private boolean isAssignmentOperation(ParserRuleContext parserRuleContext) {
 		return (parserRuleContext.getChildCount() == 3) && (parserRuleContext.getChild(1).getText().equals("="));
 	}
